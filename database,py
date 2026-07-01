@@ -20,8 +20,8 @@ def get_supabase() -> Client:
     Supabaseクライアントを取得
     """
 
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    url = st.secrets["https://cgznchpsgdqampgcxhft.supabase.co"]
+    key = st.secrets["sb_publishable_AooimLsFivuBm1w4wSoUXw_6HM2cicj"]
 
     return create_client(url, key)
 
