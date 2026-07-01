@@ -1,168 +1,74 @@
-"""
-database.py
-Supabaseとの通信を担当するモジュール（完全版）
-"""
-
-import pandas as pd
 import streamlit as st
-from typing import Optional
-from supabase import create_client, Client
+import pandas as pd
+from supabase import create_client
 
 
 # ===============================
 # Supabase接続
 # ===============================
 
-@st.cache_resource
-def get_supabase() -> Optional[Client]:
-    """
-    Supabaseクライアント取得（安全版）
-    - secrets未設定でもクラッシュしない
-    """
-
+def get_client():
     try:
-        # ★ここが正しい書き方（超重要）
         url = st.secrets["https://cgznchpsgdqampgcxhft.supabase.co"]
         key = st.secrets["sb_publishable_AooimLsFivuBm1w4wSoUXw_6HM2cicj"]
-
-        if not url or not key:
-            return None
-
         return create_client(url, key)
-
-    except Exception as e:
-        st.error(f"Supabase接続エラー: {e}")
+    except Exception:
         return None
 
 
-supabase = get_supabase()
+def client():
+    return get_client()
 
 
 # ===============================
-# 接続チェック
+# 取得（シーズン別）
 # ===============================
 
-def is_connected() -> bool:
-    return supabase is not None
+def get_dataframe(season: str) -> pd.DataFrame:
+    c = client()
 
-
-# ===============================
-# データ取得
-# ===============================
-
-def get_dataframe() -> pd.DataFrame:
-
-    if supabase is None:
+    if c is None:
         return pd.DataFrame()
 
     try:
         res = (
-            supabase.table("duel_records")
+            c.table("duel_records")
             .select("*")
+            .eq("season", season)
             .order("duel_date", desc=True)
             .execute()
         )
 
         return pd.DataFrame(res.data)
 
-    except Exception as e:
-        st.error(f"データ取得エラー: {e}")
+    except Exception:
         return pd.DataFrame()
 
 
 # ===============================
-# データ追加
+# 追加
 # ===============================
 
-def add_record(
-    duel_date: str,
-    deck: str,
-    opponent_deck: str,
-    rank: str,
-    coin: str,
-    turn: str,
-    result: str,
-    memo: str,
-):
+def add_record(season, duel_date, deck, opponent_deck, coin, turn, result, memo):
 
-    if supabase is None:
-        st.error("Supabase未接続（Secretsを確認してください）")
-        return None
+    c = client()
+
+    if c is None:
+        return False, "Supabase未接続"
 
     try:
-        data = {
+        c.table("duel_records").insert({
+            "season": season,
             "duel_date": duel_date,
             "deck": deck,
             "opponent_deck": opponent_deck,
-            "rank": rank,
             "coin": coin,
             "turn": turn,
             "result": result,
             "memo": memo,
-        }
+        }).execute()
 
-        return supabase.table("duel_records").insert(data).execute()
-
-    except Exception as e:
-        st.error(f"登録エラー: {e}")
-        return None
-
-
-# ===============================
-# データ削除
-# ===============================
-
-def delete_record(record_id: int):
-
-    if supabase is None:
-        st.error("Supabase未接続")
-        return None
-
-    try:
-        return (
-            supabase.table("duel_records")
-            .delete()
-            .eq("id", record_id)
-            .execute()
-        )
+        return True, "OK"
 
     except Exception as e:
-        st.error(f"削除エラー: {e}")
-        return None
-
-
-# ===============================
-# 件数系
-# ===============================
-
-def get_total_matches() -> int:
-    df = get_dataframe()
-    return len(df)
-
-
-def get_total_wins() -> int:
-    df = get_dataframe()
-    if df.empty:
-        return 0
-    return len(df[df["result"] == "勝ち"])
-
-
-def get_total_losses() -> int:
-    df = get_dataframe()
-    if df.empty:
-        return 0
-    return len(df[df["result"] == "負け"])
-
-
-# ===============================
-# CSV出力
-# ===============================
-
-def export_csv() -> bytes:
-
-    df = get_dataframe()
-
-    return df.to_csv(
-        index=False,
-        encoding="utf-8-sig"
-    ).encode("utf-8-sig")
+        return False, str(e)
