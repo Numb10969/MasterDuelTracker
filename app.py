@@ -1,95 +1,114 @@
 import streamlit as st
 from database import add_record, get_dataframe
 
+
+# ===============================
+# 初期設定
+# ===============================
+
 st.set_page_config(page_title="Master Duel Tracker", layout="wide")
 
-st.title("🎴 Master Duel 戦績記録")
+st.title("🎴 Master Duel 戦績管理")
 
 
 # ===============================
-# 状態管理（超重要）
+# シーズン管理
 # ===============================
 
-if "deck" not in st.session_state:
-    st.session_state.deck = ""
+if "season" not in st.session_state:
+    st.session_state.season = "2026-S1"
 
-if "opponent" not in st.session_state:
-    st.session_state.opponent = ""
+st.sidebar.header("📅 シーズン管理")
 
-if "rank" not in st.session_state:
-    st.session_state.rank = ""
+st.sidebar.write(f"現在: {st.session_state.season}")
 
-
-# ===============================
-# 入力（最低限）
-# ===============================
-
-st.subheader("📝 基本情報")
-
-st.session_state.deck = st.text_input("自分のデッキ", st.session_state.deck)
-st.session_state.opponent = st.text_input("相手デッキ", st.session_state.opponent)
-st.session_state.rank = st.text_input("ランク", st.session_state.rank)
+if st.sidebar.button("➕ 新シーズン"):
+    num = int(st.session_state.season[-1]) + 1
+    st.session_state.season = f"2026-S{num}"
+    st.rerun()
 
 
 # ===============================
-# ワンタップ記録ボタン
+# 入力UI
 # ===============================
 
-st.subheader("⚡ 対戦結果を記録（ワンタップ）")
+st.subheader("🎮 試合入力")
+
+deck = st.text_input("自分のデッキ")
+opponent = st.text_input("相手デッキ")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🏆 勝ち"):
-        add_record(
-            str(st.date_input("日付")),
-            st.session_state.deck,
-            st.session_state.opponent,
-            st.session_state.rank,
-            "表",          # 仮（後で選択式にできる）
-            "先攻",
-            "勝ち",
-            ""
-        )
-        st.success("勝ちを記録しました")
-        st.rerun()
+    result = st.radio("勝敗", ["勝ち", "負け"])
 
 with col2:
-    if st.button("💀 負け"):
-        add_record(
-            str(st.date_input("日付")),
-            st.session_state.deck,
-            st.session_state.opponent,
-            st.session_state.rank,
-            "表",
-            "先攻",
-            "負け",
-            ""
-        )
-        st.error("負けを記録しました")
+    coin = st.radio("コイントス", ["表", "裏"])
+
+turn = st.radio("先攻 / 後攻", ["先攻", "後攻"])
+
+date = st.date_input("日付")
+
+
+# ===============================
+# 保存
+# ===============================
+
+if st.button("📥 記録する"):
+
+    ok, msg = add_record(
+        st.session_state.season,
+        str(date),
+        deck,
+        opponent,
+        coin,
+        turn,
+        result,
+        ""
+    )
+
+    if ok:
+        st.success("記録しました")
         st.rerun()
+    else:
+        st.error(msg)
 
 
 # ===============================
-# 補助ボタン（後攻など）
+# データ取得
 # ===============================
 
-col3, col4 = st.columns(2)
-
-with col3:
-    if st.button("先攻"):
-        st.session_state.turn = "先攻"
-
-with col4:
-    if st.button("後攻"):
-        st.session_state.turn = "後攻"
+df = get_dataframe(st.session_state.season)
 
 
 # ===============================
-# データ表示
+# 統計
 # ===============================
 
-st.subheader("📊 戦績")
+st.subheader("📊 統計")
 
-df = get_dataframe()
+if not df.empty:
+
+    total = len(df)
+    win = len(df[df["result"] == "勝ち"])
+
+    first = len(df[df["turn"] == "先攻"])
+    coin_head = len(df[df["coin"] == "表"])
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("勝率", f"{win/total*100:.1f}%")
+    col2.metric("先攻率", f"{first/total*100:.1f}%")
+    col3.metric("表率", f"{coin_head/total*100:.1f}%")
+
+else:
+    st.info("データなし")
+
+
+# ===============================
+# 一覧
+# ===============================
+
+st.subheader("📋 戦績一覧")
+
 st.dataframe(df)
